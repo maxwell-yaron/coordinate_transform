@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Example</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/107/three.min.js"></script>
+<script src="https://unpkg.com/three@0.85.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+
+<body>
+<div>
+<h3>Controls</h3>
+LINE:<input type="number" id="line" step="5" value=20 onchange="update()"></input>
+ROLL:<input type="number" id="roll" step="0.1" value=0 onchange="update()"></input>
+PITCH:<input type="number" id="pitch" step="0.1" value=0 onchange="update()"></input>
+YAW:<input type="number" id="yaw" step="0.1" value=0 onchange="update()"></input>
+X:<input type="number" id="X" step="2" value=0 onchange="update()"></input>
+Y:<input type="number" id="Y" step="1" value=0 onchange="update()"></input>
+Z:<input type="number" id="Z" step="2" value=0 onchange="update()"></input>
+<button onclick="reset()">RESET</button>
+<p style="color: #FF0000">NOTE: Although Euler Angles are used as inputs, the actual rotations are done using quaternions to prevent gimbal lock</p>
+
+</div>
+<div width=1000 height=800 id="view"></div>
+<script>
+  var SIZE = 5;
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera( 75, window.innerWidth/window.innerHeight, 0.1, 1000 );
+
+  camera.position.x = 40;
+  camera.position.y = 30;
+  camera.position.z = 50;
+  var renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setClearColor("#000000");
+  var grid = new THREE.GridHelper(100, 100);
+  var controls = new THREE.OrbitControls( camera, renderer.domElement );
+  controls.enableKeys = false;
+
+  container = document.getElementById("view");
+  container.appendChild(renderer.domElement);
+
+  var line_mat = new THREE.LineBasicMaterial( {
+	color: 0xFF0000,
+	linewidth: 1,
+  } );
+  var pin_mat = new THREE.LineBasicMaterial( {
+	color: 0x00FF00,
+	linewidth: 1,
+  } );
+
+  var line_value = document.getElementById("line").value;
+  var pin_geo = new THREE.Geometry();
+  pin_geo.vertices.push(new THREE.Vector3(0,SIZE/2,0));
+  pin_geo.vertices.push(new THREE.Vector3(line_value,SIZE/2,0));
+  var pin = new THREE.Line( pin_geo, pin_mat );
+
+  var line_ref = new THREE.Geometry();
+  line_ref.vertices.push(new THREE.Vector3(0,SIZE/2,0));
+  line_ref.vertices.push(new THREE.Vector3(line_value,SIZE/2,0));
+  var line_wire = new THREE.Line( line_ref, line_mat );
+
+  var light = new THREE.AmbientLight(0xCCCCCC);
+  var spot = new THREE.SpotLight(0xffffff);
+  spot.position.set(-30, 60, 60);
+
+  // Create a box with wireframe and a solid box.
+  var ref = new THREE.BoxGeometry(SIZE,SIZE,SIZE);
+  var box = new THREE.BoxGeometry(SIZE,SIZE,SIZE);
+  var wire = new THREE.MeshLambertMaterial({color: 0xFF0000, wireframe: true,});
+  var mat = new THREE.MeshLambertMaterial({color: 0x877DFA, wireframe: false,});
+  var cube_wire = new THREE.Mesh(ref, wire);
+  var cube = new THREE.Mesh(box, mat);
+  var tip_geo = new THREE.SphereGeometry(1,10,10);
+  var tip_mat = new THREE.MeshLambertMaterial({color: 0x87FF55, wireframe: false,});
+  var tip = new THREE.Mesh(tip_geo, tip_mat);
+  tip.position.x = line_value;
+  tip.position.y = SIZE/2;
+  cube.position.y=SIZE/2;
+  cube_wire.position.y=SIZE/2;
+  scene.add(light);
+  scene.add(spot);
+  scene.add(cube);
+  scene.add(cube_wire);
+  scene.add(grid);
+  scene.add(line_wire);
+  scene.add(pin);
+  scene.add(tip);
+
+  function setPinPosition(roll,pitch,yaw,x,y,z) {
+    // Set the first point to be the origin of the box.
+    pin.geometry.vertices[0].x = +x;
+    pin.geometry.vertices[0].y = +y;
+    pin.geometry.vertices[0].z = +z;
+
+    // Get quaternion from Euler Angles.
+    // This is a bit fiddly. Really conversion directly from rotation matrix
+    // Is probably better.
+    var euler = new THREE.Euler(+roll,+yaw,+pitch);
+    var quat = new THREE.Quaternion();
+    quat.setFromEuler(euler);
+
+    // Transform the base point.
+    var line_value = document.getElementById("line").value;
+    var base = new THREE.Vector3(line_value, 0, 0);
+    var origin = pin.geometry.vertices[0];
+
+    base.applyQuaternion(quat);
+    // Apply translation
+    base.x = +x + +base.x;
+    base.y = +y + +base.y;
+    base.z = +z + +base.z;
+
+    // Set the secondary point.
+    tip.position.x = base.x;
+    tip.position.y = base.y;
+    tip.position.z = base.z;
+    pin.geometry.vertices[1] = base;
+    pin.geometry.verticesNeedUpdate = true;
+  }
+
+  function update() {
+    var roll = document.getElementById("roll").value;
+    var pitch = document.getElementById("pitch").value;
+    var yaw = document.getElementById("yaw").value;
+    var X = document.getElementById("X").value;
+    var Y = document.getElementById("Y").value + SIZE/2;
+    var Z = document.getElementById("Z").value;
+    var line_value = document.getElementById("line").value;
+    cube.rotation.x = roll;
+    cube.rotation.y = yaw;
+    cube.rotation.z = pitch;
+    cube.position.x = X;
+    cube.position.y = Y;
+    cube.position.z = Z;
+    line_wire.geometry.vertices[1].x = line_value;
+    line_wire.geometry.verticesNeedUpdate = true;
+    setPinPosition(roll, pitch, yaw, X, Y, Z);
+  }
+
+
+  function reset() {
+    cube.rotation.x = 0;
+    cube.rotation.y = 0;
+    cube.rotation.z = 0;
+    cube.position.x = 0;
+    cube.position.y = SIZE/2;
+    cube.position.z = 0;
+  }
+  function render() {
+    requestAnimationFrame(render);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  render();
+
+</script>
+</body>
+
+</html>
